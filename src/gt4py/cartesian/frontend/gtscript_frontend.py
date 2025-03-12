@@ -344,7 +344,9 @@ class ReturnReplacer(gt_utils.meta.ASTTransformPass):
         """Ensure that there is only a single return statement (can still return a tuple)."""
         ret_count = sum(isinstance(node, ast.Return) for node in ast.walk(ast_object))
         if ret_count > 1:
-            raise GTScriptSyntaxError("GTScript Functions cannot have multiple return statements")
+            raise GTScriptSyntaxError(
+                "GTScript Functions cannot have multiple return statements"
+            )
         elif ret_count == 0 and target_node is not None:
             raise GTScriptSyntaxError(
                 "Attempting to assign the return value of a GTScript function that does not return anything."
@@ -470,7 +472,9 @@ class CallInliner(ast.NodeTransformer):
         elif isinstance(node, ast.Subscript):
             return self._get_sliced_symbol(node.value)
 
-    def visit_Call(self, node: ast.Call, *, target_node=None):  # Cyclomatic complexity too high
+    def visit_Call(
+        self, node: ast.Call, *, target_node=None
+    ):  # Cyclomatic complexity too high
         if _filter_absolute_K_index_method(node):
             return node
         call_name = gt_meta.get_qualified_name_from_node(node.func)
@@ -529,7 +533,9 @@ class CallInliner(ast.NodeTransformer):
         # Recursively inline any possible nested subroutine call
         self.current_name = call_name
         CallInliner.apply(
-            call_ast, call_info["local_context"], call_stack={*self.call_stack, call_name}
+            call_ast,
+            call_info["local_context"],
+            call_stack={*self.call_stack, call_name},
         )
 
         # Rename local names in subroutine to avoid conflicts with caller context names
@@ -547,10 +553,14 @@ class CallInliner(ast.NodeTransformer):
             if isinstance(target, ast.Subscript):
                 sliced_symbol = self._get_sliced_symbol(target)
                 if sliced_symbol not in call_args:
-                    raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
+                    raise GTScriptSyntaxError(
+                        message="Unsupported assignment target.", loc=target
+                    )
             else:
                 if not isinstance(target, ast.Name):
-                    raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
+                    raise GTScriptSyntaxError(
+                        message="Unsupported assignment target.", loc=target
+                    )
 
                 assigned_symbols.add(target.id)
 
@@ -573,7 +583,9 @@ class CallInliner(ast.NodeTransformer):
 
         # Replace returns by assignments in subroutine
         if target_node is None:
-            return_nodes = [nd for nd in ast.walk(call_ast) if isinstance(nd, ast.Return)]
+            return_nodes = [
+                nd for nd in ast.walk(call_ast) if isinstance(nd, ast.Return)
+            ]
             if any(isinstance(nd.value, ast.Tuple) for nd in return_nodes):
                 raise GTScriptSyntaxError(
                     "Only functions with a single return value can be used in expressions, including as call arguments. "
@@ -658,7 +670,8 @@ class CallInliner(ast.NodeTransformer):
     def visit_Expr(self, node: ast.Expr):
         if (
             isinstance(node.value, ast.Call)
-            and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
+            and gt_meta.get_qualified_name_from_node(node.value.func)
+            not in gtscript.MATH_BUILTINS
         ):
             # Inline a function with no return value and then remove the current node
             self.visit(node.value, target_node=None)
@@ -719,7 +732,11 @@ class LoopIndexReplacer(ast.NodeTransformer):
 def _get_loop_index_values(
     node: Union[ast.Call, ast.List, ast.Tuple], context: dict
 ) -> Optional[Union[list, range]]:
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range":
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "range"
+    ):
         range_args = [eval(ast.unparse(arg), context) for arg in node.args]
         assert 1 <= len(range_args) <= 3
         if len(range_args) == 1:
@@ -767,7 +784,10 @@ class ReductionUnroller(ast.NodeTransformer):
         if not 2 <= len(args) <= 3:
             raise GTScriptSyntaxError("Reduce: the function takes 2 to 3 arguments.")
 
-        if isinstance(args[0], ast.Name) and (op_id := args[0].id) in self.REDUCTION_OP_TO_AST_OP:
+        if (
+            isinstance(args[0], ast.Name)
+            and (op_id := args[0].id) in self.REDUCTION_OP_TO_AST_OP
+        ):
             op = self.REDUCTION_OP_TO_AST_OP[op_id]()
         else:
             raise GTScriptSyntaxError("Reduce: invalid reduction operator.")
@@ -779,7 +799,9 @@ class ReductionUnroller(ast.NodeTransformer):
                 _get_loop_index_values(generator_expr.generators[0].iter, self.context)
             )
         else:
-            raise GTScriptSyntaxError("Reduce: second argument should be a generator expression.")
+            raise GTScriptSyntaxError(
+                "Reduce: second argument should be a generator expression."
+            )
 
         initial_value = args[2] if len(node.args) == 3 else None
 
@@ -787,7 +809,9 @@ class ReductionUnroller(ast.NodeTransformer):
             op, template_item, index_name, index_values, left=initial_value
         )
 
-    def _get_binary_node(self, op, template_item, index_name, index_values, left=None) -> ast.BinOp:
+    def _get_binary_node(
+        self, op, template_item, index_name, index_values, left=None
+    ) -> ast.BinOp:
         if left is None:
             assert len(index_values) > 1
             left = LoopIndexReplacer(index_name, index_values[0]).visit(
@@ -820,7 +844,9 @@ class DataDimLoopUnroller(ast.NodeTransformer):
     def visit_For(self, node: ast.For) -> Union[ast.For, list[ast.AST]]:
         super().generic_visit(node)
 
-        if (index_values := _get_loop_index_values(node.iter, self.context)) is not None:
+        if (
+            index_values := _get_loop_index_values(node.iter, self.context)
+        ) is not None:
             assert isinstance(node.target, ast.Name)
             index_name = node.target.id
 
@@ -1019,7 +1045,7 @@ class IRMaker(ast.NodeVisitor):
             ),
             "float": (
                 nodes.NativeFunction.F32
-                if int(os.getenv("GT4PY_LITERAL_PRECISION", "64")) == "32"
+                if int(os.getenv("GT4PY_LITERAL_PRECISION", "64")) == 32
                 else nodes.NativeFunction.F64
             ),
         }
