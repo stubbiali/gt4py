@@ -141,6 +141,7 @@ import sys
 from typing import List, Optional, Sequence
 
 import numpy as np
+import os
 
 from gt4py.cartesian.definitions import CartesianSpace
 from gt4py.cartesian.utils.attrib import (
@@ -289,6 +290,16 @@ DataType.FRONTEND_TO_NATIVE = {
     "i64": DataType.INT64,
     "f32": DataType.FLOAT32,
     "f64": DataType.FLOAT64,
+    "int": (
+        DataType.INT32
+        if int(os.getenv("GT4PY_LITERAL_PRECISION", "64")) == 32
+        else DataType.INT64
+    ),
+    "float": (
+        DataType.FLOAT32
+        if int(os.getenv("GT4PY_LITERAL_PRECISION", "64")) == "32"
+        else DataType.FLOAT64
+    ),
 }
 
 DataType.NATIVE_TYPE_TO_NUMPY = {
@@ -302,7 +313,9 @@ DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.FLOAT64: "float64",
 }
 
-DataType.NUMPY_TO_NATIVE_TYPE = {value: key for key, value in DataType.NATIVE_TYPE_TO_NUMPY.items()}
+DataType.NUMPY_TO_NATIVE_TYPE = {
+    value: key for key, value in DataType.NATIVE_TYPE_TO_NUMPY.items()
+}
 
 
 # ---- IR: expressions ----
@@ -363,10 +376,17 @@ class FieldRef(Ref):
 
     @classmethod
     def at_center(
-        cls, name: str, axes: Sequence[str], data_index: Optional[List[int]] = None, loc=None
+        cls,
+        name: str,
+        axes: Sequence[str],
+        data_index: Optional[List[int]] = None,
+        loc=None,
     ):
         return cls(
-            name=name, offset={axis: 0 for axis in axes}, data_index=data_index or [], loc=loc
+            name=name,
+            offset={axis: 0 for axis in axes},
+            data_index=data_index or [],
+            loc=loc,
         )
 
     @classmethod
@@ -739,12 +759,17 @@ class AxisInterval(Node):
         if not isinstance(self.start, AxisBound) or not isinstance(self.end, AxisBound):
             return False
 
-        return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
+        return (
+            self.start.level == self.end.level
+            and self.start.offset == self.end.offset - 1
+        )
 
     def disjoint_from(self, other: AxisInterval) -> bool:
         def get_offset(bound: AxisBound) -> int:
             return (
-                0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset
+                0 + bound.offset
+                if bound.level == LevelMarker.START
+                else sys.maxsize + bound.offset
             )
 
         self_start = get_offset(self.start)

@@ -69,6 +69,8 @@ TYPE_HINT_AND_CAST_BUILTINS = {
     "i64",
     "f32",
     "f64",
+    "int",
+    "float",
 }
 
 REDUCTION_BUILTINS = {"reduce", "add"}
@@ -137,13 +139,17 @@ def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
         # arguments are annotated using instances (and not subclasses) of 'Field',
         # which is explicitly forbidden by 'get_type_hints()'.
         #
-        if isinstance(annotation, _FieldDescriptor) and isinstance(annotation.dtype, str):
+        if isinstance(annotation, _FieldDescriptor) and isinstance(
+            annotation.dtype, str
+        ):
             if annotation.dtype in dtypes:
                 return _FieldDescriptor(
                     dtypes[annotation.dtype], annotation.axes, annotation.data_dims
                 )
             else:
-                raise ValueError(f"Missing '{annotation.dtype}' dtype definition for arg '{arg}'")
+                raise ValueError(
+                    f"Missing '{annotation.dtype}' dtype definition for arg '{arg}'"
+                )
         elif isinstance(annotation, str):
             if annotation in dtypes:
                 return dtypes[annotation]
@@ -271,7 +277,9 @@ def stencil(
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
     if not isinstance(raise_if_not_cached, bool):
-        raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
+        raise ValueError(
+            f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')"
+        )
     if cache_settings is not None and not isinstance(cache_settings, dict):
         raise ValueError(f"Invalid 'cache_settings' dictionary ('{cache_settings}')")
 
@@ -425,7 +433,9 @@ def lazy_stencil(
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
     if not isinstance(raise_if_not_cached, bool):
-        raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
+        raise ValueError(
+            f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')"
+        )
 
     module = None
     if name:
@@ -448,7 +458,13 @@ def lazy_stencil(
 
     # Setup build_info timings
     if build_info is not None:
-        time_keys = ("parse_time", "module_time", "codegen_time", "build_time", "load_time")
+        time_keys = (
+            "parse_time",
+            "module_time",
+            "codegen_time",
+            "build_time",
+            "load_time",
+        )
         build_info.update({time_key: 0.0 for time_key in time_keys})
 
     build_options = gt_definitions.BuildOptions(
@@ -686,9 +702,7 @@ class _FieldDescriptor:
         return f"_FieldDescriptor({args})"
 
     def __str__(self) -> str:
-        return (
-            f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
-        )
+        return f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
 
     def at(self, *, K):
         """Stub function used to implement absolute
@@ -709,14 +723,18 @@ class _FieldDescriptorMaker:
         axes = IJK
         data_dims = ()
 
-        if isinstance(field_spec, str) or not isinstance(field_spec, collections.abc.Collection):
+        if isinstance(field_spec, str) or not isinstance(
+            field_spec, collections.abc.Collection
+        ):
             # Field[dtype] # noqa: ERA001 [commented-out-code]
             dtype = field_spec
         elif _FieldDescriptorMaker._is_axes_spec(field_spec[0]):
             # Field[axes, dtype] # noqa: ERA001 [commented-out-code]
             assert len(field_spec) == 2
             axes, dtype = field_spec
-        elif len(field_spec) == 2 and not _FieldDescriptorMaker._is_axes_spec(field_spec[1]):
+        elif len(field_spec) == 2 and not _FieldDescriptorMaker._is_axes_spec(
+            field_spec[1]
+        ):
             # Field[high_dimensional_dtype] # noqa: ERA001 [commented-out-code]
             dtype = field_spec
         else:
@@ -732,7 +750,10 @@ class _FieldDescriptorMaker:
 
 class _GlobalTableDescriptorMaker(_FieldDescriptorMaker):
     def __getitem__(self, field_spec):
-        if not isinstance(field_spec, collections.abc.Collection) and not len(field_spec) == 2:
+        if (
+            not isinstance(field_spec, collections.abc.Collection)
+            and not len(field_spec) == 2
+        ):
             raise ValueError("GlobalTable is defined by a tuple (type, [axes_size..])")
 
         dtype, data_dims = field_spec
@@ -816,8 +837,8 @@ def compile_assert(expr):
 # GTScript builtins: type cast & hints
 i32 = np.int32
 i64 = np.int64
-f64 = np.float64
 f32 = np.float32
+f64 = np.float64
 _gt_all_op_types = Union[i32, i64, f32, f64]
 
 

@@ -16,7 +16,20 @@ import textwrap
 import time
 import types
 import warnings
-from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tuple, Type, Union
+import os
+from typing import (
+    Any,
+    Dict,
+    Final,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 import numpy as np
 
@@ -54,7 +67,9 @@ class AssertionChecker(ast.NodeTransformer):
         self.source = source
 
     def _process_assertion(self, expr_node: ast.Expr) -> None:
-        condition_value = gt_utils.meta.ast_eval(expr_node, self.context, default=NOTHING)
+        condition_value = gt_utils.meta.ast_eval(
+            expr_node, self.context, default=NOTHING
+        )
         if condition_value is not NOTHING:
             if not condition_value:
                 source_lines = textwrap.dedent(self.source).split("\n")
@@ -150,7 +165,8 @@ class AxisIntervalParser(gt_meta.ASTPass):
     def slice_from_value(node: ast.Expr) -> ast.Slice:
         """Create an ast.Slice node from a general ast.Expr node."""
         slice_node = ast.Slice(
-            lower=node, upper=ast.BinOp(left=node, op=ast.Add(), right=ast.Constant(value=1))
+            lower=node,
+            upper=ast.BinOp(left=node, op=ast.Add(), right=ast.Constant(value=1)),
         )
         slice_node = ast.copy_location(slice_node, node)
         return slice_node
@@ -170,7 +186,11 @@ class AxisIntervalParser(gt_meta.ASTPass):
                 level = value
                 offset = 0
             elif isinstance(value, gtscript.AxisIndex):
-                level = nodes.LevelMarker.START if value.index >= 0 else nodes.LevelMarker.END
+                level = (
+                    nodes.LevelMarker.START
+                    if value.index >= 0
+                    else nodes.LevelMarker.END
+                )
                 offset = value.index + value.offset
             elif value is None:
                 LARGE_NUM = 10000
@@ -179,7 +199,9 @@ class AxisIntervalParser(gt_meta.ASTPass):
                 if self.axis_name == seq_name:
                     offset = 0
                 else:
-                    offset = -LARGE_NUM if level == nodes.LevelMarker.START else LARGE_NUM
+                    offset = (
+                        -LARGE_NUM if level == nodes.LevelMarker.START else LARGE_NUM
+                    )
             else:
                 raise self.interval_error
 
@@ -188,7 +210,9 @@ class AxisIntervalParser(gt_meta.ASTPass):
     def visit_Name(self, node: ast.Name) -> nodes.VarRef:
         return nodes.VarRef(name=node.id, loc=nodes.Location.from_ast_node(node))
 
-    def visit_Constant(self, node: ast.Constant) -> Union[int, gtscript.AxisIndex, None]:
+    def visit_Constant(
+        self, node: ast.Constant
+    ) -> Union[int, gtscript.AxisIndex, None]:
         if isinstance(node.value, gtscript.AxisIndex):
             return node.value
         elif isinstance(node.value, numbers.Number):
@@ -201,7 +225,9 @@ class AxisIntervalParser(gt_meta.ASTPass):
                 loc=self.loc,
             )
 
-    def visit_BinOp(self, node: ast.BinOp) -> Union[gtscript.AxisIndex, nodes.AxisBound, int]:
+    def visit_BinOp(
+        self, node: ast.BinOp
+    ) -> Union[gtscript.AxisIndex, nodes.AxisBound, int]:
         left = self.visit(node.left)
         right = self.visit(node.right)
 
@@ -212,12 +238,16 @@ class AxisIntervalParser(gt_meta.ASTPass):
             bin_op = lambda x, y: x - y  # noqa: E731 [lambda-assignment]
             u_op = lambda x: -x  # noqa: E731 [lambda-assignment]
         elif isinstance(node.op, ast.Mult):
-            if left.level != right.level or not isinstance(left.level, nodes.LevelMarker):
+            if left.level != right.level or not isinstance(
+                left.level, nodes.LevelMarker
+            ):
                 raise self.interval_error
             bin_op = lambda x, y: x * y  # noqa: E731 [lambda-assignment]
             u_op = None
         else:
-            raise GTScriptSyntaxError("Unexpected binary operator found in interval expression")
+            raise GTScriptSyntaxError(
+                "Unexpected binary operator found in interval expression"
+            )
 
         incompatible_types_error = GTScriptSyntaxError(
             "Incompatible types found in interval expression"
@@ -355,7 +385,11 @@ class CallInliner(ast.NodeTransformer):
 
     @classmethod
     def apply(
-        cls, func_node: ast.FunctionDef, context: dict, *, call_stack: Optional[Set[str]] = None
+        cls,
+        func_node: ast.FunctionDef,
+        context: dict,
+        *,
+        call_stack: Optional[Set[str]] = None,
     ):
         inliner = cls(context, call_stack=call_stack or set())
         inliner(func_node)
@@ -451,8 +485,12 @@ class CallInliner(ast.NodeTransformer):
         if call_name in gtscript.IGNORE_WHEN_INLINING:
             # Not a function to inline, return as-is.
             return node
-        elif call_name not in self.context or not hasattr(self.context[call_name], "_gtscript_"):
-            raise GTScriptSyntaxError("Unknown call", loc=nodes.Location.from_ast_node(node))
+        elif call_name not in self.context or not hasattr(
+            self.context[call_name], "_gtscript_"
+        ):
+            raise GTScriptSyntaxError(
+                "Unknown call", loc=nodes.Location.from_ast_node(node)
+            )
 
         # Extract call arguments
         call_info = self.context[call_name]._gtscript_
@@ -496,7 +534,9 @@ class CallInliner(ast.NodeTransformer):
 
         # Rename local names in subroutine to avoid conflicts with caller context names
         try:
-            assign_targets = gt_meta.collect_assign_targets(call_ast, allow_multiple_targets=False)
+            assign_targets = gt_meta.collect_assign_targets(
+                call_ast, allow_multiple_targets=False
+            )
         except RuntimeError as e:
             raise GTScriptSyntaxError(
                 message="Assignment to more than one target is not supported."
@@ -525,7 +565,10 @@ class CallInliner(ast.NodeTransformer):
         template_fmt = "{name}__" + call_id_suffix
 
         gt_meta.map_symbol_names(
-            call_ast, name_mapping, template_fmt=template_fmt, skip_names=self.all_skip_names
+            call_ast,
+            name_mapping,
+            template_fmt=template_fmt,
+            skip_names=self.all_skip_names,
         )
 
         # Replace returns by assignments in subroutine
@@ -648,7 +691,9 @@ class CompiledIfInliner(ast.NodeTransformer):
                 category=DeprecationWarning,
             )
             eval_node = node.test.args[0]
-            condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
+            condition_value = gt_utils.meta.ast_eval(
+                eval_node, self.context, default=NOTHING
+            )
             if condition_value is not NOTHING:
                 node = node.body if condition_value else node.orelse
             else:
@@ -807,7 +852,9 @@ def _make_temp_decls(
 
 
 def _make_init_computations(
-    temp_decls: Dict[str, nodes.FieldDecl], init_values: Dict[str, Any], func_node: ast.AST
+    temp_decls: Dict[str, nodes.FieldDecl],
+    init_values: Dict[str, Any],
+    func_node: ast.AST,
 ) -> List[nodes.ComputationBlock]:
     if not temp_decls:
         return []
@@ -819,7 +866,8 @@ def _make_init_computations(
         if decl.data_dims:
             for index in itertools.product(*(range(i) for i in decl.data_dims)):
                 literal_index = [
-                    nodes.ScalarLiteral(value=i, data_type=nodes.DataType.INT32) for i in index
+                    nodes.ScalarLiteral(value=i, data_type=nodes.DataType.INT32)
+                    for i in index
                 ]
                 stmts.append(
                     nodes.Assign(
@@ -834,7 +882,8 @@ def _make_init_computations(
         else:
             stmts.append(
                 nodes.Assign(
-                    target=nodes.FieldRef.at_center(name, axes=decl.axes), value=init_values[name]
+                    target=nodes.FieldRef.at_center(name, axes=decl.axes),
+                    value=init_values[name],
                 )
             )
 
@@ -886,6 +935,13 @@ def _is_datadims_indexing_node(node):
         and node.value.attr == _DATADIMS_INDEXER
         and isinstance(node.value.value, ast.Name)
     )
+
+
+# def test_function():
+#     if int(os.getenv("PACE_FLOAT_PRECISION", "64")) == 32:
+#         return nodes.NativeFunction.I32
+#     else:
+#         return nodes.NativeFunction.I64
 
 
 class IRMaker(ast.NodeVisitor):
@@ -956,6 +1012,16 @@ class IRMaker(ast.NodeVisitor):
             "i64": nodes.NativeFunction.I64,
             "f32": nodes.NativeFunction.F32,
             "f64": nodes.NativeFunction.F64,
+            "int": (
+                nodes.NativeFunction.I32
+                if int(os.getenv("GT4PY_LITERAL_PRECISION", "64")) == 32
+                else nodes.NativeFunction.I64
+            ),
+            "float": (
+                nodes.NativeFunction.F32
+                if int(os.getenv("GT4PY_LITERAL_PRECISION", "64")) == "32"
+                else nodes.NativeFunction.F64
+            ),
         }
 
     def __call__(self, ast_root: ast.AST):
@@ -982,7 +1048,11 @@ class IRMaker(ast.NodeVisitor):
         return name in self.local_symbols
 
     def _is_known(self, name: str):
-        return self._is_field(name) or self._is_parameter(name) or self._is_local_symbol(name)
+        return (
+            self._is_field(name)
+            or self._is_parameter(name)
+            or self._is_local_symbol(name)
+        )
 
     def _are_blocks_sorted(self, compute_blocks: List[nodes.ComputationBlock]):
         def sort_blocks_key(comp_block):
@@ -1015,7 +1085,9 @@ class IRMaker(ast.NodeVisitor):
         return compute_blocks == compute_blocks_sorted
 
     def _parse_region_intervals(
-        self, node: Union[ast.ExtSlice, ast.Index, ast.Tuple], loc: nodes.Location = None
+        self,
+        node: Union[ast.ExtSlice, ast.Index, ast.Tuple],
+        loc: nodes.Location = None,
     ) -> Dict[str, nodes.AxisInterval]:
         if isinstance(node, ast.Index):
             # Python 3.8 wraps a Tuple in an Index for region[0, 1]
@@ -1031,7 +1103,8 @@ class IRMaker(ast.NodeVisitor):
             ]
         else:
             raise GTScriptSyntaxError(
-                f"Invalid 'region' index at line {loc.line} (column {loc.column})", loc=loc
+                f"Invalid 'region' index at line {loc.line} (column {loc.column})",
+                loc=loc,
             )
         axes_names = [axis.name for axis in self.domain.parallel_axes]
         return {
@@ -1043,7 +1116,8 @@ class IRMaker(ast.NodeVisitor):
         self, node: ast.withitem, loc: nodes.Location
     ) -> List[Dict[str, nodes.AxisInterval]]:
         syntax_error = GTScriptSyntaxError(
-            f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
+            f"Invalid 'with' statement at line {loc.line} (column {loc.column})",
+            loc=loc,
         )
 
         call_args = node.context_expr.args
@@ -1054,7 +1128,9 @@ class IRMaker(ast.NodeVisitor):
 
         return [self._parse_region_intervals(arg.slice, loc) for arg in call_args]
 
-    def _are_intervals_nonoverlapping(self, compute_blocks: List[nodes.ComputationBlock]):
+    def _are_intervals_nonoverlapping(
+        self, compute_blocks: List[nodes.ComputationBlock]
+    ):
         for i, block in enumerate(compute_blocks[1:]):
             other = compute_blocks[i]
             if not block.interval.disjoint_from(other.interval):
@@ -1063,7 +1139,8 @@ class IRMaker(ast.NodeVisitor):
 
     def _visit_iteration_order_node(self, node: ast.withitem, loc: nodes.Location):
         syntax_error = GTScriptSyntaxError(
-            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})", loc=loc
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
+            loc=loc,
         )
         comp_node = node.context_expr
         if len(comp_node.args) + len(comp_node.keywords) != 1 or any(
@@ -1125,7 +1202,8 @@ class IRMaker(ast.NodeVisitor):
     def _visit_computation_node(self, node: ast.With) -> nodes.ComputationBlock:
         loc = nodes.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
-            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})", loc=loc
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
+            loc=loc,
         )
 
         # Parse computation specification, i.e. `withItems` nodes
@@ -1244,7 +1322,9 @@ class IRMaker(ast.NodeVisitor):
         symbol = node.id
         if self._is_field(symbol):
             result = nodes.FieldRef.at_center(
-                symbol, axes=self.fields[symbol].axes, loc=nodes.Location.from_ast_node(node)
+                symbol,
+                axes=self.fields[symbol].axes,
+                loc=nodes.Location.from_ast_node(node),
             )
         elif self._is_parameter(symbol):
             result = nodes.VarRef(name=symbol, loc=nodes.Location.from_ast_node(node))
@@ -1252,7 +1332,8 @@ class IRMaker(ast.NodeVisitor):
             raise AssertionError("Logic error")
         elif _is_datadims_indexing_name(symbol):
             result = nodes.FieldRef.datadims_index(
-                name=_trim_indexing_symbol(symbol), loc=nodes.Location.from_ast_node(node)
+                name=_trim_indexing_symbol(symbol),
+                loc=nodes.Location.from_ast_node(node),
             )
         elif _is_iterator_access(symbol):
             return nodes.IteratorAccess()
@@ -1266,12 +1347,16 @@ class IRMaker(ast.NodeVisitor):
         return index
 
     def _eval_new_spatial_index(
-        self, index_nodes: Sequence[nodes.Expr], field_axes: Optional[Set[Literal["I", "J", "K"]]]
+        self,
+        index_nodes: Sequence[nodes.Expr],
+        field_axes: Optional[Set[Literal["I", "J", "K"]]],
     ) -> List[int]:
         index_dict = {}
         all_spatial_axes = ("I", "J", "K")
         last_index = -1
-        axis_context = {axis: gtscript.ShiftedAxis(name=axis, shift=0) for axis in field_axes}
+        axis_context = {
+            axis: gtscript.ShiftedAxis(name=axis, shift=0) for axis in field_axes
+        }
 
         for index_node in index_nodes:
             try:
@@ -1293,7 +1378,8 @@ class IRMaker(ast.NodeVisitor):
                     )
                 elif axis_index < last_index:
                     raise GTScriptSyntaxError(
-                        message=f"Axis {value.name} is specified out of order", loc=index_node
+                        message=f"Axis {value.name} is specified out of order",
+                        loc=index_node,
                     )
                 elif axis_index == last_index:
                     raise GTScriptSyntaxError(
@@ -1307,14 +1393,22 @@ class IRMaker(ast.NodeVisitor):
                     shift = 0
                 index_dict[value.name] = shift
 
-        return [index_dict.get(axis, 0) for axis in ("I", "J", "K") if axis in field_axes]
+        return [
+            index_dict.get(axis, 0) for axis in ("I", "J", "K") if axis in field_axes
+        ]
 
     def _eval_index(
-        self, node: ast.Subscript, field_axes: Optional[Set[Literal["I", "J", "K"]]] = None
+        self,
+        node: ast.Subscript,
+        field_axes: Optional[Set[Literal["I", "J", "K"]]] = None,
     ) -> Optional[Union[List[int], nodes.AbsoluteKIndex]]:
-        tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+        tuple_or_expr = (
+            node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+        )
         index_nodes = gtc_utils.listify(
-            tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
+            tuple_or_expr.elts
+            if isinstance(tuple_or_expr, ast.Tuple)
+            else tuple_or_expr
         )
 
         if any(isinstance(cn, ast.Slice) for cn in index_nodes):
@@ -1326,7 +1420,9 @@ class IRMaker(ast.NodeVisitor):
         # If this is parsing a data index, this should be fine and will return False.
         new_style_spatial_syntax = field_axes is not None and any(
             (isinstance(node, ast.Name) and node.id in field_axes)
-            or (isinstance(node, ast.Constant) and isinstance(node.value, gtscript.Axis))
+            or (
+                isinstance(node, ast.Constant) and isinstance(node.value, gtscript.Axis)
+            )
             for index_node in index_nodes
             for node in ast.walk(index_node)
         )
@@ -1368,14 +1464,20 @@ class IRMaker(ast.NodeVisitor):
                     if len(field_axes) != len(index):
                         ro_field_message = ""
                         if len(field_axes) == 0:
-                            ro_field_message = f"Did you mean absolute indexing via .A{index}?"
+                            ro_field_message = (
+                                f"Did you mean absolute indexing via .A{index}?"
+                            )
                         raise GTScriptSyntaxError(
                             f"Incorrect offset specification detected for {result.name}. "
                             f"Found index={index}, but {result.name} field has dimensions ({', '.join(field_axes)}). "
                             f"{ro_field_message}"
                         )
-                    result.offset = {axis: value for axis, value in zip(field_axes, index)}
-            elif isinstance(node.value, ast.Subscript) or _is_datadims_indexing_node(node):
+                    result.offset = {
+                        axis: value for axis, value in zip(field_axes, index)
+                    }
+            elif isinstance(node.value, ast.Subscript) or _is_datadims_indexing_node(
+                node
+            ):
                 result.data_index = [
                     (
                         nodes.ScalarLiteral(value=value, data_type=nodes.DataType.INT32)
@@ -1404,7 +1506,8 @@ class IRMaker(ast.NodeVisitor):
                     )
             else:
                 raise GTScriptSyntaxError(
-                    "Unrecognized subscript expression", loc=nodes.Location.from_ast_node(node)
+                    "Unrecognized subscript expression",
+                    loc=nodes.Location.from_ast_node(node),
                 )
 
         return result
@@ -1416,7 +1519,9 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(arg, numbers.Number):
             result = eval("{op}{arg}".format(op=op.python_symbol, arg=arg))
         else:
-            result = nodes.UnaryOpExpr(op=op, arg=arg, loc=nodes.Location.from_ast_node(node))
+            result = nodes.UnaryOpExpr(
+                op=op, arg=arg, loc=nodes.Location.from_ast_node(node)
+            )
 
         return result
 
@@ -1487,7 +1592,9 @@ class IRMaker(ast.NodeVisitor):
         rhs = self.visit(node.values[-1])
         for value in reversed(node.values[:-1]):
             lhs = self.visit(value)
-            rhs = nodes.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node))
+            rhs = nodes.BinOpExpr(
+                op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node)
+            )
             res = rhs
 
         return res
@@ -1503,11 +1610,15 @@ class IRMaker(ast.NodeVisitor):
 
         for i in range(len(node.comparators) - 2, -1, -1):
             lhs = self.visit(node.values[i])
-            rhs = nodes.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node))
+            rhs = nodes.BinOpExpr(
+                op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node)
+            )
             op = self.visit(node.ops[i])
             args.append(lhs)
 
-        result = nodes.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node))
+        result = nodes.BinOpExpr(
+            op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node)
+        )
 
         return result
 
@@ -1545,9 +1656,13 @@ class IRMaker(ast.NodeVisitor):
             nodes.If(
                 condition=self.visit(node.test),
                 loc=nodes.Location.from_ast_node(node),
-                main_body=nodes.BlockStmt(stmts=main_stmts, loc=nodes.Location.from_ast_node(node)),
+                main_body=nodes.BlockStmt(
+                    stmts=main_stmts, loc=nodes.Location.from_ast_node(node)
+                ),
                 else_body=(
-                    nodes.BlockStmt(stmts=else_stmts, loc=nodes.Location.from_ast_node(node))
+                    nodes.BlockStmt(
+                        stmts=else_stmts, loc=nodes.Location.from_ast_node(node)
+                    )
                     if else_stmts
                     else None
                 ),
@@ -1616,7 +1731,9 @@ class IRMaker(ast.NodeVisitor):
         assert isinstance(field, nodes.FieldRef)
         field.offset = nodes.AbsoluteKIndex(k=self.visit(node.keywords[0].value))
         if len(node.keywords) == 2:
-            field.data_index = [self.visit(value) for value in node.keywords[1].value.elts]
+            field.data_index = [
+                self.visit(value) for value in node.keywords[1].value.elts
+            ]
         return field
 
     def visit_Call(self, node: ast.Call):
@@ -1672,7 +1789,9 @@ class IRMaker(ast.NodeVisitor):
         return name, spatial_offset, data_index
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> list:
-        return self._resolve_assign(node, [node.target], target_annotation=node.annotation)
+        return self._resolve_assign(
+            node, [node.target], target_annotation=node.annotation
+        )
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> list:
         return self._resolve_assign(node, node.targets)
@@ -1752,7 +1871,9 @@ class IRMaker(ast.NodeVisitor):
                 self.written_vars.add(name)
 
             axes = self.fields[name].axes
-            par_axes_names = [axis.name for axis in nodes.Domain.LatLonGrid().parallel_axes]
+            par_axes_names = [
+                axis.name for axis in nodes.Domain.LatLonGrid().parallel_axes
+            ]
             if self.iteration_order == nodes.IterationOrder.PARALLEL:
                 par_axes_names.append(nodes.Domain.LatLonGrid().sequential_axis.name)
             if set(par_axes_names) - set(axes):
@@ -1768,7 +1889,9 @@ class IRMaker(ast.NodeVisitor):
         assert len(target) == len(value)
         for left, right in zip(target, value):
             result.append(
-                nodes.Assign(target=left, value=right, loc=nodes.Location.from_ast_node(node))
+                nodes.Assign(
+                    target=left, value=right, loc=nodes.Location.from_ast_node(node)
+                )
             )
 
         return result
@@ -1784,7 +1907,8 @@ class IRMaker(ast.NodeVisitor):
     def visit_With(self, node: ast.With):
         loc = nodes.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
-            f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
+            f"Invalid 'with' statement at line {loc.line} (column {loc.column})",
+            loc=loc,
         )
 
         if (
@@ -1793,7 +1917,9 @@ class IRMaker(ast.NodeVisitor):
             and node.items[0].context_expr.func.id == "horizontal"
         ):
             if any(isinstance(child_node, ast.With) for child_node in node.body):
-                raise GTScriptSyntaxError("Cannot nest `with` node inside horizontal region")
+                raise GTScriptSyntaxError(
+                    "Cannot nest `with` node inside horizontal region"
+                )
 
             self.parsing_horizontal_region = True
             intervals_dicts = self._visit_with_horizontal(node.items[0], loc)
@@ -1803,7 +1929,9 @@ class IRMaker(ast.NodeVisitor):
             self.parsing_horizontal_region = False
             stmts = list(filter(lambda stmt: isinstance(stmt, nodes.Decl), all_stmts))
             body_block = nodes.BlockStmt(
-                stmts=list(filter(lambda stmt: not isinstance(stmt, nodes.Decl), all_stmts)),
+                stmts=list(
+                    filter(lambda stmt: not isinstance(stmt, nodes.Decl), all_stmts)
+                ),
                 loc=loc,
             )
             names = _find_accesses_with_offsets(body_block)
@@ -1845,7 +1973,9 @@ class IRMaker(ast.NodeVisitor):
                 # Parse nested `with` blocks
                 compute_blocks = []
                 for with_node in node.body:
-                    with_node = copy.deepcopy(with_node)  # Copy to avoid altering original ast
+                    with_node = copy.deepcopy(
+                        with_node
+                    )  # Copy to avoid altering original ast
                     # Splice `withItems` of current/primary with statement into nested with
                     with_node.items.extend(node.items)
 
@@ -1912,7 +2042,9 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
                             message="writing to an GlobalTable ('A' global indexation) is forbidden",
                             loc=nodes.Location.from_ast_node(node),
                         )
-                    elif isinstance(t.value, ast.Subscript) and isinstance(t.value.value, ast.Name):
+                    elif isinstance(t.value, ast.Subscript) and isinstance(
+                        t.value.value, ast.Name
+                    ):
                         name_node = t.value.value
                     else:
                         raise invalid_target
@@ -1947,7 +2079,9 @@ class GTScriptParser(ast.NodeVisitor):
 
     def __str__(self) -> str:
         result = "<GT4Py.GTScriptParser> {\n"
-        result += "\n".join("\t{}: {}".format(name, getattr(self, name)) for name in vars(self))
+        result += "\n".join(
+            "\t{}: {}".format(name, getattr(self, name)) for name in vars(self)
+        )
         result += "\n}"
         return result
 
@@ -2001,14 +2135,22 @@ class GTScriptParser(ast.NodeVisitor):
                     )
 
                 api_signature.append(
-                    nodes.ArgumentInfo(name=param.name, is_keyword=is_keyword, default=default)
+                    nodes.ArgumentInfo(
+                        name=param.name, is_keyword=is_keyword, default=default
+                    )
                 )
 
                 api_annotations.append(dtype_annotation)
 
-        nonlocal_symbols, imported_symbols = GTScriptParser.collect_external_symbols(definition)
-        ast_func_def = gt_meta.get_ast(definition, feature_version=PYTHON_AST_VERSION).body[0]
-        canonical_ast = gt_meta.ast_dump(ast_func_def, feature_version=PYTHON_AST_VERSION)
+        nonlocal_symbols, imported_symbols = GTScriptParser.collect_external_symbols(
+            definition
+        )
+        ast_func_def = gt_meta.get_ast(
+            definition, feature_version=PYTHON_AST_VERSION
+        ).body[0]
+        canonical_ast = gt_meta.ast_dump(
+            ast_func_def, feature_version=PYTHON_AST_VERSION
+        )
 
         # resolve externals
         if externals is not None:
@@ -2033,7 +2175,9 @@ class GTScriptParser(ast.NodeVisitor):
             **(resolved_externals if externals is not None else nonlocal_symbols),
             **nodes.DataType.FRONTEND_TO_NATIVE,
         }
-        ann_assigns = tuple(filter(lambda stmt: isinstance(stmt, ast.AnnAssign), ast_func_def.body))
+        ann_assigns = tuple(
+            filter(lambda stmt: isinstance(stmt, ast.AnnAssign), ast_func_def.body)
+        )
         for ann_assign in ann_assigns:
             assert isinstance(ann_assign.target, ast.Name)
             name = ann_assign.target.id
@@ -2097,7 +2241,9 @@ class GTScriptParser(ast.NodeVisitor):
                     wrong_imports.append(key)
 
         if wrong_imports:
-            raise GTScriptSyntaxError("Invalid 'import' statements ({})".format(wrong_imports))
+            raise GTScriptSyntaxError(
+                "Invalid 'import' statements ({})".format(wrong_imports)
+            )
 
         context, unbound = gt_meta.get_closure(
             definition, included_nonlocals=True, include_builtins=False
@@ -2152,7 +2298,9 @@ class GTScriptParser(ast.NodeVisitor):
             raise GTScriptDefinitionError(
                 name=name,
                 value="<unknown>",
-                message="Missing or invalid value for external symbol {name}".format(name=name),
+                message="Missing or invalid value for external symbol {name}".format(
+                    name=name
+                ),
                 loc=loc,
             ) from e
         return value
@@ -2189,20 +2337,28 @@ class GTScriptParser(ast.NodeVisitor):
                             (
                                 attr_name,
                                 GTScriptParser.eval_external(
-                                    attr_name, context, nodes.Location.from_ast_node(attr_nodes[0])
+                                    attr_name,
+                                    context,
+                                    nodes.Location.from_ast_node(attr_nodes[0]),
                                 ),
                             )
                         )
 
                 elif not exhaustive:
-                    resolved_values_list.append((name, GTScriptParser.eval_external(name, context)))
+                    resolved_values_list.append(
+                        (name, GTScriptParser.eval_external(name, context))
+                    )
 
             for _, value in resolved_values_list:
                 if hasattr(value, "_gtscript_") and exhaustive:
                     assert callable(value)
                     nested_inlined_values = {
-                        "{}.{}".format(value._gtscript_["qualified_name"], item_name): item_value
-                        for item_name, item_value in value._gtscript_["nonlocals"].items()
+                        "{}.{}".format(
+                            value._gtscript_["qualified_name"], item_name
+                        ): item_value
+                        for item_name, item_value in value._gtscript_[
+                            "nonlocals"
+                        ].items()
                     }
                     resolved_values_list.extend(nested_inlined_values.items())
 
@@ -2239,7 +2395,8 @@ class GTScriptParser(ast.NodeVisitor):
         for arg_info, arg_annotation in zip(api_signature, api_annotations):
             try:
                 assert arg_annotation in gtscript._VALID_DATA_TYPES or isinstance(
-                    arg_annotation, (gtscript._SequenceDescriptor, gtscript._FieldDescriptor)
+                    arg_annotation,
+                    (gtscript._SequenceDescriptor, gtscript._FieldDescriptor),
                 ), "Invalid parameter annotation"
 
                 if arg_annotation in gtscript._VALID_DATA_TYPES:
@@ -2255,12 +2412,17 @@ class GTScriptParser(ast.NodeVisitor):
                     data_type = nodes.DataType.from_dtype(np.dtype(arg_annotation))
                     length = arg_annotation.length
                     parameter_decls[arg_info.name] = nodes.VarDecl(
-                        name=arg_info.name, data_type=data_type, length=length, is_api=True
+                        name=arg_info.name,
+                        data_type=data_type,
+                        length=length,
+                        is_api=True,
                     )
                 else:
                     assert isinstance(arg_annotation, gtscript._FieldDescriptor)
                     assert arg_info.default in [nodes.Empty, None]
-                    data_type = nodes.DataType.from_dtype(np.dtype(arg_annotation.dtype))
+                    data_type = nodes.DataType.from_dtype(
+                        np.dtype(arg_annotation.dtype)
+                    )
                     axes = [ax.name for ax in arg_annotation.axes]
                     data_dims = list(arg_annotation.data_dims)
                     fields_decls[arg_info.name] = nodes.FieldDecl(
@@ -2305,7 +2467,9 @@ class GTScriptParser(ast.NodeVisitor):
         for value in self.resolved_externals.values():
             if hasattr(value, "_gtscript_"):
                 assert callable(value)
-                func_node = gt_meta.get_ast(value, feature_version=PYTHON_AST_VERSION).body[0]
+                func_node = gt_meta.get_ast(
+                    value, feature_version=PYTHON_AST_VERSION
+                ).body[0]
                 local_context = self.resolve_external_symbols(
                     value._gtscript_["nonlocals"],
                     value._gtscript_["imported"],
@@ -2339,15 +2503,21 @@ class GTScriptParser(ast.NodeVisitor):
         DataDimLoopUnroller.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
-        CompiledIfInliner.apply(main_func_node, context=local_context, stencil_name=self.main_name)
+        CompiledIfInliner.apply(
+            main_func_node, context=local_context, stencil_name=self.main_name
+        )
 
-        AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
+        AssertionChecker.apply(
+            main_func_node, context=local_context, source=self.source
+        )
 
         temp_decls = _make_temp_decls(self.definition._gtscript_["temp_annotations"])
         fields_decls.update(temp_decls)
 
         init_computations = _make_init_computations(
-            temp_decls, self.definition._gtscript_["temp_init_values"], func_node=main_func_node
+            temp_decls,
+            self.definition._gtscript_["temp_init_values"],
+            func_node=main_func_node,
         )
 
         # Generate definition IR
@@ -2367,12 +2537,18 @@ class GTScriptParser(ast.NodeVisitor):
             domain=domain,
             api_signature=api_signature,
             api_fields=[
-                fields_decls[item.name] for item in api_signature if item.name in fields_decls
+                fields_decls[item.name]
+                for item in api_signature
+                if item.name in fields_decls
             ],
             parameters=[
-                parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
+                parameter_decls[item.name]
+                for item in api_signature
+                if item.name in parameter_decls
             ],
-            computations=init_computations + computations if init_computations else computations,
+            computations=(
+                init_computations + computations if init_computations else computations
+            ),
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),
@@ -2398,7 +2574,9 @@ class GTScriptFrontend(Frontend):
         }
         for name, value in definition._gtscript_["externals"].items():
             fingerprint[name] = (
-                value._gtscript_["canonical_ast"] if hasattr(value, "_gtscript_") else value
+                value._gtscript_["canonical_ast"]
+                if hasattr(value, "_gtscript_")
+                else value
             )
 
         definition_id = gt_utils.shashed_id(fingerprint)
@@ -2418,7 +2596,9 @@ class GTScriptFrontend(Frontend):
 
         if not hasattr(definition, "_gtscript_"):
             cls.prepare_stencil_definition(definition, externals)
-        translator = GTScriptParser(definition, externals=externals, dtypes=dtypes, options=options)
+        translator = GTScriptParser(
+            definition, externals=externals, dtypes=dtypes, options=options
+        )
         definition_ir = translator.run(backend_name)
 
         # GTIR only supports LatLonGrids
